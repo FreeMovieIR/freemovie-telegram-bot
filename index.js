@@ -3,7 +3,7 @@ addEventListener('fetch', event => {
 });
 
 async function handleRequest(request) {
-  const TELEGRAM_API = 'https://api.telegram.org/bot7645852149:AAEKMAQusgN-6wJNhYQkT7p6STjMeJTWZMg';
+  const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`; // توکن از متغیر محیطی میاد
   const WEBHOOK_URL = 'https://telegram-bot.yourname.workers.dev'; // این رو با URL خودت عوض کن
 
   if (request.method === 'POST') {
