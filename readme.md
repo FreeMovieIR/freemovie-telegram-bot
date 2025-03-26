@@ -1,8 +1,8 @@
 
 # FreeMovieIRBot - ربات تلگرامی جستجوی فیلم و سریال
 
-![GitHub repo size](https://img.shields.io/github/repo-size/m4tinbeigi-official/FreeMovieIRBot)
-![GitHub last commit](https://img.shields.io/github/last-commit/m4tinbeigi-official/FreeMovieIRBot)
+![GitHub repo size](https://img.shields.io/github/repo-size/FreeMovieIR/freemovie-telegram-bot)
+![GitHub last commit](https://img.shields.io/github/last-commit/FreeMovieIR/freemovie-telegram-bot)
 
 **FreeMovieIRBot** یک ربات تلگرامی است که به کاربران امکان جستجوی فیلم و سریال‌ها را با استفاده از API TMDb می‌دهد. این ربات به زبان پارسی طراحی شده و اطلاعات کاملی از جمله خلاصه داستان، ژانر، امتیاز و لینک‌های دانلود را ارائه می‌کند. برای استفاده از ربات، کاربران باید در کانال `@FreeMoviez_ir` عضو شوند.
 
