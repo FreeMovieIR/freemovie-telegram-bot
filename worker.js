@@ -37,10 +37,10 @@ async function handleRequest(request) {
       return new Response('Invalid update', { status: 400 });
     }
 
-    const chatId = update.message ? update.message.chat.id : update.callback_query ? update.callback_query.message.chat.id : null;
-    const userId = update.message ? update.message.from.id : update.callback_query ? update.callback_query.from.id : update.inline_query ? update.inline_query.from.id : null;
-    const text = update.message ? update.message.text || '' : '';
-    const callbackData = update.callback_query ? update.callback_query.data : null;
+    const chatId = update.message?.chat?.id || update.callback_query?.message?.chat?.id || null;
+    const userId = update.message?.from?.id || update.callback_query?.from?.id || update.inline_query?.from?.id || null;
+    const text = update.message?.text || '';
+    const callbackData = update.callback_query?.data || null;
     const inlineQuery = update.inline_query;
 
     // بررسی عضویت کاربر در کانال
@@ -79,8 +79,8 @@ async function handleRequest(request) {
         return new Response('OK', { status: 200 });
       }
 
-      const movieSearchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDb_API_KEY}&language=${language}&query=${encodeURIComponent(query)}`;
-      const tvSearchUrl = `https://api.themoviedb.org/3/search/tv?api_key=${TMDb_API_KEY}&language=${language}&query=${encodeURIComponent(query)}`;
+      const movieSearchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDb_API_KEY}&language=${language}&query=${encodeURIComponent(query)}&append_to_response=external_ids`;
+      const tvSearchUrl = `https://api.themoviedb.org/3/search/tv?api_key=${TMDb_API_KEY}&language=${language}&query=${encodeURIComponent(query)}&append_to_response=external_ids`;
 
       const [movieRes, tvRes] = await Promise.all([
         fetch(movieSearchUrl).then(res => res.ok ? res.json() : Promise.reject(`خطای سرور (فیلم‌ها): ${res.status}`)),
@@ -100,13 +100,21 @@ async function handleRequest(request) {
         const year = movie.release_date ? movie.release_date.substr(0, 4) : 'نامشخص';
         const poster = movie.poster_path ? `${baseImageUrl}${movie.poster_path}` : defaultPoster;
         const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'نامشخص';
+        const overview = movie.overview ? movie.overview.slice(0, 80) + '...' : 'بدون خلاصه';
+        const genres = movie.genre_ids ? await fetchGenres(movie.genre_ids, 'movie') : 'نامشخص';
+
+        // کپشن با اطلاعات کامل
+        const caption = `🎥 ${titleFa} (${year})\n` +
+                        `📝 ${titleEn}\n` +
+                        `⭐ ${rating}/10 | 🎭 ${genres}\n` +
+                        `📖 ${overview}`;
 
         inlineResults.push({
           type: 'photo',
           id: `movie_${movie.id}`,
           photo_url: poster,
           thumb_url: poster,
-          caption: `🎥 ${titleFa}\n📝 ${titleEn}\n📅 ${year}\n⭐ ${rating}/10\n🆔 ${movie.id}`,
+          caption: caption,
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `details_${movie.id}` }],
@@ -122,13 +130,23 @@ async function handleRequest(request) {
         const year = tv.first_air_date ? tv.first_air_date.substr(0, 4) : 'نامشخص';
         const poster = tv.poster_path ? `${baseImageUrl}${tv.poster_path}` : defaultPoster;
         const rating = tv.vote_average ? tv.vote_average.toFixed(1) : 'نامشخص';
+        const overview = tv.overview ? tv.overview.slice(0, 80) + '...' : 'بدون خلاصه';
+        const genres = tv.genre_ids ? await fetchGenres(tv.genre_ids, 'tv') : 'نامشخص';
+        const seasons = tv.number_of_seasons || 'نامشخص';
+
+        // کپشن با اطلاعات کامل
+        const caption = `📺 ${titleFa} (${year})\n` +
+                        `📝 ${titleEn}\n` +
+                        `⭐ ${rating}/10 | 🎭 ${genres}\n` +
+                        `📖 ${overview}\n` +
+                        `📅 فصل‌ها: ${seasons}`;
 
         inlineResults.push({
           type: 'photo',
           id: `series_${tv.id}`,
           photo_url: poster,
           thumb_url: poster,
-          caption: `📺 ${titleFa}\n📝 ${titleEn}\n📅 ${year}\n⭐ ${rating}/10\n🆔 ${tv.id}`,
+          caption: caption,
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `seriesdetails_${tv.id}` }],
@@ -148,28 +166,16 @@ async function handleRequest(request) {
       const itemId = isMovie ? callbackData.replace('details_', '') : callbackData.replace('seriesdetails_', '');
       const type = isMovie ? 'فیلم' : 'سریال';
 
-      if (!chatId) {
-        console.error('Chat ID is undefined in callback query');
-        await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            callback_query_id: update.callback_query.id,
-            text: 'لطفاً این درخواست رو توی چت خصوصی با ربات امتحان کنید!',
-            show_alert: true,
-          }),
-        });
-        return new Response('OK', { status: 200 });
-      }
+      const effectiveChatId = chatId || userId;
 
-      await sendMessage(TELEGRAM_API, chatId, `⏳ یه لحظه صبر کن، دارم اطلاعات ${type} ${itemId} رو برات میارم...`);
+      await sendMessage(TELEGRAM_API, effectiveChatId, `⏳ یه لحظه صبر کن، دارم اطلاعات ${type} ${itemId} رو برات میارم...`);
 
       const details = isMovie
         ? await fetchMovieDetails(itemId, TMDb_API_KEY, language)
         : await fetchSeriesDetails(itemId, TMDb_API_KEY, language);
 
       if (!details) {
-        await sendMessage(TELEGRAM_API, chatId, `❌ مشکلی پیش اومد! نمی‌تونم اطلاعات ${type} رو پیدا کنم.`);
+        await sendMessage(TELEGRAM_API, effectiveChatId, `❌ مشکلی پیش اومد! نمی‌تونم اطلاعات ${type} رو پیدا کنم.`);
       } else if (isMovie) {
         const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
         const titleFa = details.title || 'نامشخص';
@@ -178,7 +184,7 @@ async function handleRequest(request) {
         const overview = details.overview || 'بدون خلاصه';
         const genres = details.genres ? details.genres.map(g => g.name).join('، ') : 'نامشخص';
         const rating = details.vote_average ? Number(details.vote_average).toFixed(1) : 'بدون امتیاز';
-        const imdbId = details.imdb_id || ''; // از external_ids می‌گیریم
+        const imdbId = details.external_ids?.imdb_id || '';
         const imdbShort = imdbId ? imdbId.replace('tt', '') : '';
 
         const detailsMessage = `🎬 ${titleFa} (${year})\n` +
@@ -187,7 +193,6 @@ async function handleRequest(request) {
                               `🎭 ژانر: ${genres}\n` +
                               `⭐ امتیاز: ${rating}/10`;
 
-        // دکمه‌های دانلود و لینک سایت
         const buttons = [];
         if (imdbShort) {
           buttons.push([
@@ -202,7 +207,7 @@ async function handleRequest(request) {
           { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/movie/index.html?id=${itemId}` },
         ]);
 
-        await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, buttons);
+        await sendPhotoWithCaption(TELEGRAM_API, effectiveChatId, poster, detailsMessage, buttons);
       } else {
         const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
         const titleFa = details.name || 'نامشخص';
@@ -221,10 +226,9 @@ async function handleRequest(request) {
                               `⭐ امتیاز: ${rating}/10\n` +
                               `📅 فصل‌ها: ${numberOfSeasons}`;
 
-        // دکمه‌های دانلود و لینک سایت
         const buttons = [];
         if (imdbId && numberOfSeasons > 0) {
-          for (let season = 1; season <= Math.min(numberOfSeasons, 2); season++) { // محدود به 2 فصل برای جلوگیری از شلوغی
+          for (let season = 1; season <= Math.min(numberOfSeasons, 2); season++) {
             buttons.push([
               { text: `📥 فصل ${season} - کیفیت 1`, url: `https://subtitle.saymyname.website/DL/filmgir/?i=${imdbId}&f=${season}&q=1` },
               { text: `📥 کیفیت 2`, url: `https://subtitle.saymyname.website/DL/filmgir/?i=${imdbId}&f=${season}&q=2` },
@@ -239,7 +243,7 @@ async function handleRequest(request) {
           { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/series/index.html?id=${itemId}` },
         ]);
 
-        await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, buttons);
+        await sendPhotoWithCaption(TELEGRAM_API, effectiveChatId, poster, detailsMessage, buttons);
       }
 
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
@@ -253,6 +257,21 @@ async function handleRequest(request) {
   } catch (error) {
     console.error('Error in handleRequest:', error);
     return new Response('Internal Server Error', { status: 500 });
+  }
+}
+
+// تابع برای دریافت نام ژانرها
+async function fetchGenres(genreIds, type) {
+  try {
+    const genreUrl = `https://api.themoviedb.org/3/genre/${type}/list?api_key=${TMDb_API_KEY}&language=${language}`;
+    const response = await fetch(genreUrl);
+    if (!response.ok) throw new Error(`خطای سرور (ژانرها): ${response.status}`);
+    const data = await response.json();
+    const genres = data.genres.filter(g => genreIds.includes(g.id)).map(g => g.name).join('، ');
+    return genres || 'نامشخص';
+  } catch (error) {
+    console.error('Error fetching genres:', error);
+    return 'نامشخص';
   }
 }
 
