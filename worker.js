@@ -35,35 +35,37 @@ async function handleRequest(request) {
     const update = await request.json();
     console.log('Update received:', JSON.stringify(update, null, 2));
 
-    if (!update.message && !update.callback_query && !update.inline_query && !update.chosen_inline_result) {
+    if (!update.message && !update.callback_query && !update.inline_query && !update.chosen_inline_result && !update.my_chat_member) {
       return new Response('Invalid update', { status: 400 });
     }
 
     const chatId = update.message?.chat?.id || update.callback_query?.message?.chat?.id || update.chosen_inline_result?.from?.id || null;
-    const userId = update.message?.from?.id || update.callback_query?.from?.id || update.inline_query?.from?.id || update.chosen_inline_result?.from?.id || null;
+    const userId = update.message?.from?.id || update.callback_query?.from?.id || update.inline_query?.from?.id || update.chosen_inline_result?.from?.id || update.my_chat_member?.from?.id || null;
     const text = update.message?.text || '';
     const callbackData = update.callback_query?.data || null;
     const inlineQuery = update.inline_query;
     const chosenInlineResult = update.chosen_inline_result;
 
     // بررسی عضویت کاربر در کانال
-    const isMember = await checkChannelMembership(chatId, userId);
-    if (!isMember) {
-      const joinMessage = `برای استفاده از ربات، لطفاً ابتدا در کانال ${CHANNEL_USERNAME} عضو شوید!`;
-      const joinButton = [[{ text: 'عضویت در کانال', url: 'https://t.me/FreeMoviez_ir' }]];
-      if (chatId) {
-        await sendMessageWithButtons(TELEGRAM_API, chatId, joinMessage, joinButton);
-      } else if (inlineQuery) {
-        await answerInlineQuery(TELEGRAM_API, inlineQuery.id, [{
-          type: 'photo',
-          id: 'join_channel',
-          photo_url: defaultPoster,
-          thumb_url: defaultPoster,
-          caption: joinMessage,
-          reply_markup: { inline_keyboard: joinButton },
-        }]);
+    if (chatId && userId) {
+      const isMember = await checkChannelMembership(chatId, userId);
+      if (!isMember) {
+        const joinMessage = `برای استفاده از ربات، لطفاً ابتدا در کانال ${CHANNEL_USERNAME} عضو شوید!`;
+        const joinButton = [[{ text: 'عضویت در کانال', url: 'https://t.me/FreeMoviez_ir' }]];
+        if (chatId) {
+          await sendMessageWithButtons(TELEGRAM_API, chatId, joinMessage, joinButton);
+        } else if (inlineQuery) {
+          await answerInlineQuery(TELEGRAM_API, inlineQuery.id, [{
+            type: 'photo',
+            id: 'join_channel',
+            photo_url: defaultPoster,
+            thumb_url: defaultPoster,
+            caption: joinMessage,
+            reply_markup: { inline_keyboard: joinButton },
+          }]);
+        }
+        return new Response('OK', { status: 200 });
       }
-      return new Response('OK', { status: 200 });
     }
 
     // مدیریت دستور /start
@@ -89,10 +91,10 @@ async function handleRequest(request) {
 
       let movieRes, tvRes;
       try {
-        [movieRes, tvRes] = await Promise.all([
-          fetch(movieSearchUrl).then(res => res.ok ? res.json() : Promise.reject(`خطای سرور (فیلم‌ها): ${res.status}`)),
-          fetch(tvSearchUrl).then(res => res.ok ? res.json() : Promise.reject(`خطای سرور (سریال‌ها): ${res.status}`)),
-        ]);
+        const movieFetch = fetch(movieSearchUrl).then(res => res.ok ? res.json() : Promise.reject(`خطای سرور (فیلم‌ها): ${res.status}`));
+        const tvFetch = fetch(tvSearchUrl).then(res => res.ok ? res.json() : Promise.reject(`خطای سرور (سریال‌ها): ${res.status}`));
+        [movieRes, tvRes] = await Promise.all([movieFetch, tvFetch]);
+        console.log('Movies fetched:', movieRes.results?.length || 0, 'Series fetched:', tvRes.results?.length || 0);
       } catch (error) {
         console.error('Error in inline search:', error);
         await answerInlineQuery(TELEGRAM_API, inlineQueryId, []);
@@ -117,12 +119,15 @@ async function handleRequest(request) {
                         `⭐ ${rating}/10\n` +
                         `🎭 ${genres}`;
 
+        console.log(`Movie caption for ${titleFa}:`, caption);
+
         inlineResults.push({
           type: 'photo',
           id: `movie_${movie.id}`,
           photo_url: poster,
           thumb_url: poster,
           caption: caption,
+          parse_mode: 'Markdown', // برای اطمینان از فرمت درست
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `details_${movie.id}` }],
@@ -146,12 +151,15 @@ async function handleRequest(request) {
                         `⭐ ${rating}/10\n` +
                         `🎭 ${genres}`;
 
+        console.log(`Series caption for ${titleFa}:`, caption);
+
         inlineResults.push({
           type: 'photo',
           id: `series_${tv.id}`,
           photo_url: poster,
           thumb_url: poster,
           caption: caption,
+          parse_mode: 'Markdown', // برای اطمینان از فرمت درست
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `seriesdetails_${tv.id}` }],
@@ -219,7 +227,7 @@ async function handleRequest(request) {
           { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/movie/index.html?id=${itemId}` },
         ]);
 
-        console.log(`Sending photo with caption for movie ${itemId}`);
+        console.log(`Sending photo with caption for movie ${itemId}:`, detailsMessage);
         await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, buttons);
       } else {
         const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
@@ -256,7 +264,7 @@ async function handleRequest(request) {
           { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/series/index.html?id=${itemId}` },
         ]);
 
-        console.log(`Sending photo with caption for series ${itemId}`);
+        console.log(`Sending photo with caption for series ${itemId}:`, detailsMessage);
         await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, buttons);
       }
       return new Response('OK', { status: 200 });
@@ -457,7 +465,10 @@ async function answerInlineQuery(telegramApi, inlineQueryId, results) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       inline_query_id: inlineQueryId,
-      results,
+      results: results.map(result => ({
+        ...result,
+        parse_mode: 'Markdown', // برای اطمینان از فرمت درست کپشن‌ها
+      })),
       cache_time: 300,
     }),
   });
