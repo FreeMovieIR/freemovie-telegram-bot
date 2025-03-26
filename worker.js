@@ -108,16 +108,12 @@ async function handleRequest(request) {
       console.log('Processing movies:', movies.length);
       for (const movie of movies) {
         const titleFa = movie.title || 'نامشخص';
-        const titleEn = movie.original_title || 'Unknown';
         const year = movie.release_date ? movie.release_date.substr(0, 4) : 'نامشخص';
         const poster = movie.poster_path ? `${baseImageUrl}${movie.poster_path}` : defaultPoster;
         const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'نامشخص';
-        const genres = movie.genre_ids ? await fetchGenres(movie.genre_ids, 'movie') : 'نامشخص';
 
-        const caption = `🎥 ${titleFa} (${year})\n` +
-                        `📝 ${titleEn}\n` +
-                        `⭐ ${rating}/10\n` +
-                        `🎭 ${genres}`;
+        // کپشن ساده و تک‌خطی برای سرچ اینلاین
+        const caption = `${titleFa} (${year}) - ${rating}/10`;
 
         console.log(`Movie caption for ${titleFa}:`, caption);
 
@@ -127,7 +123,6 @@ async function handleRequest(request) {
           photo_url: poster,
           thumb_url: poster,
           caption: caption,
-          parse_mode: 'Markdown', // برای اطمینان از فرمت درست
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `details_${movie.id}` }],
@@ -140,16 +135,12 @@ async function handleRequest(request) {
       console.log('Processing series:', tvSeries.length);
       for (const tv of tvSeries) {
         const titleFa = tv.name || 'نامشخص';
-        const titleEn = tv.original_name || 'Unknown';
         const year = tv.first_air_date ? tv.first_air_date.substr(0, 4) : 'نامشخص';
         const poster = tv.poster_path ? `${baseImageUrl}${tv.poster_path}` : defaultPoster;
         const rating = tv.vote_average ? tv.vote_average.toFixed(1) : 'نامشخص';
-        const genres = tv.genre_ids ? await fetchGenres(tv.genre_ids, 'tv') : 'نامشخص';
 
-        const caption = `📺 ${titleFa} (${year})\n` +
-                        `📝 ${titleEn}\n` +
-                        `⭐ ${rating}/10\n` +
-                        `🎭 ${genres}`;
+        // کپشن ساده و تک‌خطی برای سرچ اینلاین
+        const caption = `${titleFa} (${year}) - ${rating}/10`;
 
         console.log(`Series caption for ${titleFa}:`, caption);
 
@@ -159,7 +150,6 @@ async function handleRequest(request) {
           photo_url: poster,
           thumb_url: poster,
           caption: caption,
-          parse_mode: 'Markdown', // برای اطمینان از فرمت درست
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `seriesdetails_${tv.id}` }],
@@ -465,10 +455,7 @@ async function answerInlineQuery(telegramApi, inlineQueryId, results) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       inline_query_id: inlineQueryId,
-      results: results.map(result => ({
-        ...result,
-        parse_mode: 'Markdown', // برای اطمینان از فرمت درست کپشن‌ها
-      })),
+      results: results, // parse_mode رو حذف کردیم چون کپشن‌ها ساده شدن
       cache_time: 300,
     }),
   });
