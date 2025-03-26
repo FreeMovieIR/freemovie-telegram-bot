@@ -20,7 +20,6 @@ async function checkChannelMembership(chatId, userId) {
     }
 
     const status = data.result.status;
-    // کاربر باید عضو باشه (member) یا ادمین (administrator/creator)
     return ['member', 'administrator', 'creator'].includes(status);
   } catch (error) {
     console.error('خطا در درخواست getChatMember:', error);
@@ -49,15 +48,18 @@ async function handleRequest(request) {
     // بررسی عضویت کاربر در کانال
     const isMember = await checkChannelMembership(chatId, userId);
     if (!isMember) {
-      const joinMessage = `برای استفاده از ربات، لطفاً ابتدا در کانال ${CHANNEL_USERNAME} عضو شوید!\nلینک عضویت: https://t.me/FreeMoviez_ir`;
+      const joinMessage = `برای استفاده از ربات، لطفاً ابتدا در کانال ${CHANNEL_USERNAME} عضو شوید!`;
+      const joinButton = [[{ text: '📢 عضویت در کانال', url: 'https://t.me/FreeMoviez_ir' }]]; // دکمه شیشه‌ای
+
       if (chatId) {
-        await sendMessage(TELEGRAM_API, chatId, joinMessage);
+        await sendMessageWithButtons(TELEGRAM_API, chatId, joinMessage, joinButton);
       } else if (inlineQuery) {
         await answerInlineQuery(TELEGRAM_API, inlineQuery.id, [{
           type: 'article',
           id: 'join_channel',
           title: 'عضویت در کانال',
           input_message_content: { message_text: joinMessage },
+          reply_markup: { inline_keyboard: joinButton },
           description: 'برای استفاده از ربات باید عضو کانال باشید.',
         }]);
       }
@@ -96,17 +98,18 @@ async function handleRequest(request) {
       const inlineResults = [];
 
       for (const movie of movies) {
-        const title = movie.title || 'نامشخص';
+        const titleFa = movie.title || 'نامشخص'; // نام فارسی
+        const titleEn = movie.original_title || 'Unknown'; // نام انگلیسی
         const year = movie.release_date ? movie.release_date.substr(0, 4) : 'نامشخص';
         const poster = movie.poster_path ? `${baseImageUrl}${movie.poster_path}` : defaultPoster;
-        const overview = movie.overview ? movie.overview.slice(0, 100) + '...' : 'بدون توضیحات';
+        const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'نامشخص';
 
         inlineResults.push({
           type: 'photo',
           id: `movie_${movie.id}`,
           photo_url: poster,
           thumb_url: poster,
-          caption: `🎥 ${title} (${year})\n${overview}\n🆔 ${movie.id}`,
+          caption: `🎥 ${titleFa}\n📝 ${titleEn}\n📅 ${year}\n⭐ ${rating}/10\n🆔 ${movie.id}`,
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `details_${movie.id}` }],
@@ -117,17 +120,18 @@ async function handleRequest(request) {
       }
 
       for (const tv of tvSeries) {
-        const title = tv.name || 'نامشخص';
+        const titleFa = tv.name || 'نامشخص'; // نام فارسی
+        const titleEn = tv.original_name || 'Unknown'; // نام انگلیسی
         const year = tv.first_air_date ? tv.first_air_date.substr(0, 4) : 'نامشخص';
         const poster = tv.poster_path ? `${baseImageUrl}${tv.poster_path}` : defaultPoster;
-        const overview = tv.overview ? tv.overview.slice(0, 100) + '...' : 'بدون توضیحات';
+        const rating = tv.vote_average ? tv.vote_average.toFixed(1) : 'نامشخص';
 
         inlineResults.push({
           type: 'photo',
           id: `series_${tv.id}`,
           photo_url: poster,
           thumb_url: poster,
-          caption: `📺 ${title} (${year})\n${overview}\n🆔 ${tv.id}`,
+          caption: `📺 ${titleFa}\n📝 ${titleEn}\n📅 ${year}\n⭐ ${rating}/10\n🆔 ${tv.id}`,
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `seriesdetails_${tv.id}` }],
@@ -147,6 +151,20 @@ async function handleRequest(request) {
       const itemId = isMovie ? callbackData.replace('details_', '') : callbackData.replace('seriesdetails_', '');
       const type = isMovie ? 'فیلم' : 'سریال';
 
+      if (!chatId) {
+        console.error('Chat ID is undefined in callback query');
+        await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            callback_query_id: update.callback_query.id,
+            text: 'لطفاً این درخواست رو توی چت خصوصی با ربات امتحان کنید!',
+            show_alert: true,
+          }),
+        });
+        return new Response('OK', { status: 200 });
+      }
+
       await sendMessage(TELEGRAM_API, chatId, `⏳ یه لحظه صبر کن، دارم اطلاعات ${type} ${itemId} رو برات میارم...`);
 
       const details = isMovie
@@ -155,18 +173,17 @@ async function handleRequest(request) {
 
       if (!details) {
         await sendMessage(TELEGRAM_API, chatId, `❌ مشکلی پیش اومد! نمی‌تونم اطلاعات ${type} رو پیدا کنم.`);
-        return new Response('OK', { status: 200 });
-      }
-
-      if (isMovie) {
+      } else if (isMovie) {
         const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
+        const titleFa = details.title || 'نامشخص';
+        const titleEn = details.original_title || 'Unknown';
         const year = details.release_date ? details.release_date.split('-')[0] : 'نامشخص';
-        const title = details.title || 'نامشخص';
         const overview = details.overview || 'بدون خلاصه';
         const genres = details.genres ? details.genres.map(g => g.name).join('، ') : 'نامشخص';
         const rating = details.vote_average ? Number(details.vote_average).toFixed(1) : 'بدون امتیاز';
 
-        const detailsMessage = `🎬 ${title} (${year})\n\n` +
+        const detailsMessage = `🎬 ${titleFa} (${year})\n` +
+                              `📝 نام انگلیسی: ${titleEn}\n` +
                               `📖 خلاصه: ${overview.slice(0, 200)}${overview.length > 200 ? '...' : ''}\n` +
                               `🎭 ژانر: ${genres}\n` +
                               `⭐ امتیاز: ${rating}/10`;
@@ -176,13 +193,15 @@ async function handleRequest(request) {
         ]);
       } else {
         const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
-        const title = details.name || 'نامشخص';
+        const titleFa = details.name || 'نامشخص';
+        const titleEn = details.original_name || 'Unknown';
         const year = details.first_air_date ? details.first_air_date.substr(0, 4) : 'نامشخص';
         const overview = details.overview || 'بدون خلاصه';
         const genres = details.genres ? details.genres.map(g => g.name).join('، ') : 'نامشخص';
         const rating = details.vote_average ? Number(details.vote_average).toFixed(1) : 'بدون امتیاز';
 
-        const detailsMessage = `📺 ${title} (${year})\n\n` +
+        const detailsMessage = `📺 ${titleFa} (${year})\n` +
+                              `📝 نام انگلیسی: ${titleEn}\n` +
                               `📖 خلاصه: ${overview.slice(0, 200)}${overview.length > 200 ? '...' : ''}\n` +
                               `🎭 ژانر: ${genres}\n` +
                               `⭐ امتیاز: ${rating}/10`;
@@ -231,6 +250,23 @@ async function sendMessage(telegramApi, chatId, text) {
   if (!response.ok) throw new Error(`Failed to send message: ${response.status}`);
 }
 
+async function sendMessageWithButtons(telegramApi, chatId, text, buttons) {
+  const url = `${telegramApi}/sendMessage`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      reply_markup: { inline_keyboard: buttons },
+    }),
+  });
+  if (!response.ok) {
+    console.error(`Failed to send message with buttons: ${response.status}`);
+    await sendMessage(telegramApi, chatId, text); // در صورت خطا، فقط متن رو بفرست
+  }
+}
+
 async function sendPhotoWithCaption(telegramApi, chatId, photoUrl, caption, buttons) {
   const url = `${telegramApi}/sendPhoto`;
   const response = await fetch(url, {
@@ -244,6 +280,7 @@ async function sendPhotoWithCaption(telegramApi, chatId, photoUrl, caption, butt
     }),
   });
   if (!response.ok) {
+    console.error(`Failed to send photo: ${response.status}`);
     await sendMessage(telegramApi, chatId, caption);
   }
 }
