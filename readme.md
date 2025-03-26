@@ -1,4 +1,4 @@
-```markdown
+
 # FreeMovieIRBot - ربات تلگرامی جستجوی فیلم و سریال
 
 ![GitHub repo size](https://img.shields.io/github/repo-size/m4tinbeigi-official/FreeMovieIRBot)
