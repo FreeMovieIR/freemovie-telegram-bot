@@ -6,6 +6,7 @@ const CHANNEL_USERNAME = '@FreeMoviez_ir'; // نام کاربری کانال
 const TMDb_API_KEY = '1dc4cbf81f0accf4fa108820d551dafc';
 const language = 'fa'; // زبان پارسی
 const baseImageUrl = 'https://image.tmdb.org/t/p/w500';
+const baseThumbUrl = 'https://image.tmdb.org/t/p/w200'; // برای تصاویر کوچک‌تر
 const defaultPoster = 'https://m4tinbeigi-official.github.io/freemovie/images/default-freemovie-300.png';
 
 // تابع بررسی عضویت کاربر در کانال
@@ -74,7 +75,7 @@ async function handleRequest(request) {
       return new Response('OK', { status: 200 });
     }
 
-    // مدیریت جستجوی اینلاین
+    // مدیریت جستجوی اینلاین (اصلاح‌شده برای نمایش به صورت article)
     if (inlineQuery) {
       const query = inlineQuery.query.trim();
       const inlineQueryId = inlineQuery.id;
@@ -110,24 +111,26 @@ async function handleRequest(request) {
         const titleFa = movie.title || 'نامشخص';
         const titleEn = movie.original_title || 'Unknown';
         const year = movie.release_date ? movie.release_date.substr(0, 4) : 'نامشخص';
-        const poster = movie.poster_path ? `${baseImageUrl}${movie.poster_path}` : defaultPoster;
+        const thumb = movie.poster_path ? `${baseThumbUrl}${movie.poster_path}` : defaultPoster; // تصویر کوچک‌تر برای thumbnail
+        const overview = movie.overview || 'بدون خلاصه';
         const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'نامشخص';
         const genres = movie.genre_ids ? await fetchGenres(movie.genre_ids, 'movie') : 'نامشخص';
 
-        const caption = `🎥 ${titleFa} (${year})\n` +
-                        `📝 ${titleEn}\n` +
-                        `⭐ ${rating}/10\n` +
-                        `🎭 ${genres}`;
+        const title = `🎥 ${titleFa} (${year})`;
+        const description = `${titleEn}\n⭐ ${rating}/10 | 🎭 ${genres}\n📖 ${overview.slice(0, 100)}${overview.length > 100 ? '...' : ''}`;
 
-        console.log(`Movie caption for ${titleFa}:`, caption);
+        console.log(`Movie description for ${titleFa}:`, description);
 
         inlineResults.push({
-          type: 'photo',
+          type: 'article',
           id: `movie_${movie.id}`,
-          photo_url: poster,
-          thumb_url: poster,
-          caption: caption,
-          parse_mode: 'Markdown', // برای اطمینان از فرمت درست
+          title: title,
+          description: description,
+          thumb_url: thumb,
+          input_message_content: {
+            message_text: `🎥 ${titleFa} (${year})\n📝 ${titleEn}\n⭐ ${rating}/10\n🎭 ${genres}\n📖 ${overview.slice(0, 200)}${overview.length > 200 ? '...' : ''}`,
+            parse_mode: 'Markdown',
+          },
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `details_${movie.id}` }],
@@ -142,24 +145,26 @@ async function handleRequest(request) {
         const titleFa = tv.name || 'نامشخص';
         const titleEn = tv.original_name || 'Unknown';
         const year = tv.first_air_date ? tv.first_air_date.substr(0, 4) : 'نامشخص';
-        const poster = tv.poster_path ? `${baseImageUrl}${tv.poster_path}` : defaultPoster;
+        const thumb = tv.poster_path ? `${baseThumbUrl}${tv.poster_path}` : defaultPoster; // تصویر کوچک‌تر برای thumbnail
+        const overview = tv.overview || 'بدون خلاصه';
         const rating = tv.vote_average ? tv.vote_average.toFixed(1) : 'نامشخص';
         const genres = tv.genre_ids ? await fetchGenres(tv.genre_ids, 'tv') : 'نامشخص';
 
-        const caption = `📺 ${titleFa} (${year})\n` +
-                        `📝 ${titleEn}\n` +
-                        `⭐ ${rating}/10\n` +
-                        `🎭 ${genres}`;
+        const title = `📺 ${titleFa} (${year})`;
+        const description = `${titleEn}\n⭐ ${rating}/10 | 🎭 ${genres}\n📖 ${overview.slice(0, 100)}${overview.length > 100 ? '...' : ''}`;
 
-        console.log(`Series caption for ${titleFa}:`, caption);
+        console.log(`Series description for ${titleFa}:`, description);
 
         inlineResults.push({
-          type: 'photo',
+          type: 'article',
           id: `series_${tv.id}`,
-          photo_url: poster,
-          thumb_url: poster,
-          caption: caption,
-          parse_mode: 'Markdown', // برای اطمینان از فرمت درست
+          title: title,
+          description: description,
+          thumb_url: thumb,
+          input_message_content: {
+            message_text: `📺 ${titleFa} (${year})\n📝 ${titleEn}\n⭐ ${rating}/10\n🎭 ${genres}\n📖 ${overview.slice(0, 200)}${overview.length > 200 ? '...' : ''}`,
+            parse_mode: 'Markdown',
+          },
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `seriesdetails_${tv.id}` }],
@@ -465,10 +470,7 @@ async function answerInlineQuery(telegramApi, inlineQueryId, results) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       inline_query_id: inlineQueryId,
-      results: results.map(result => ({
-        ...result,
-        parse_mode: 'Markdown', // برای اطمینان از فرمت درست کپشن‌ها
-      })),
+      results: results,
       cache_time: 300,
     }),
   });
