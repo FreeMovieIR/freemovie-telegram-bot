@@ -52,12 +52,12 @@ async function handleRequest(request) {
         await sendMessageWithButtons(TELEGRAM_API, chatId, joinMessage, joinButton);
       } else if (inlineQuery) {
         await answerInlineQuery(TELEGRAM_API, inlineQuery.id, [{
-          type: 'article',
+          type: 'photo',
           id: 'join_channel',
-          title: 'عضویت در کانال',
-          input_message_content: { message_text: joinMessage },
+          photo_url: defaultPoster,
+          thumb_url: defaultPoster,
+          caption: joinMessage,
           reply_markup: { inline_keyboard: joinButton },
-          description: 'برای استفاده از ربات باید عضو کانال باشید.',
         }]);
       }
       return new Response('OK', { status: 200 });
@@ -79,8 +79,8 @@ async function handleRequest(request) {
         return new Response('OK', { status: 200 });
       }
 
-      const movieSearchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDb_API_KEY}&language=${language}&query=${encodeURIComponent(query)}&append_to_response=external_ids`;
-      const tvSearchUrl = `https://api.themoviedb.org/3/search/tv?api_key=${TMDb_API_KEY}&language=${language}&query=${encodeURIComponent(query)}&append_to_response=external_ids`;
+      const movieSearchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDb_API_KEY}&language=${language}&query=${encodeURIComponent(query)}`;
+      const tvSearchUrl = `https://api.themoviedb.org/3/search/tv?api_key=${TMDb_API_KEY}&language=${language}&query=${encodeURIComponent(query)}`;
 
       const [movieRes, tvRes] = await Promise.all([
         fetch(movieSearchUrl).then(res => res.ok ? res.json() : Promise.reject(`خطای سرور (فیلم‌ها): ${res.status}`)),
@@ -100,14 +100,13 @@ async function handleRequest(request) {
         const year = movie.release_date ? movie.release_date.substr(0, 4) : 'نامشخص';
         const poster = movie.poster_path ? `${baseImageUrl}${movie.poster_path}` : defaultPoster;
         const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'نامشخص';
-        const overview = movie.overview ? movie.overview.slice(0, 80) + '...' : 'بدون خلاصه';
         const genres = movie.genre_ids ? await fetchGenres(movie.genre_ids, 'movie') : 'نامشخص';
 
-        // کپشن با اطلاعات کامل
+        // کپشن با اطلاعات مهم (بدون خلاصه و تعداد فصل)
         const caption = `🎥 ${titleFa} (${year})\n` +
                         `📝 ${titleEn}\n` +
-                        `⭐ ${rating}/10 | 🎭 ${genres}\n` +
-                        `📖 ${overview}`;
+                        `⭐ ${rating}/10\n` +
+                        `🎭 ${genres}`;
 
         inlineResults.push({
           type: 'photo',
@@ -130,16 +129,13 @@ async function handleRequest(request) {
         const year = tv.first_air_date ? tv.first_air_date.substr(0, 4) : 'نامشخص';
         const poster = tv.poster_path ? `${baseImageUrl}${tv.poster_path}` : defaultPoster;
         const rating = tv.vote_average ? tv.vote_average.toFixed(1) : 'نامشخص';
-        const overview = tv.overview ? tv.overview.slice(0, 80) + '...' : 'بدون خلاصه';
         const genres = tv.genre_ids ? await fetchGenres(tv.genre_ids, 'tv') : 'نامشخص';
-        const seasons = tv.number_of_seasons || 'نامشخص';
 
-        // کپشن با اطلاعات کامل
+        // کپشن با اطلاعات مهم (بدون خلاصه و تعداد فصل)
         const caption = `📺 ${titleFa} (${year})\n` +
                         `📝 ${titleEn}\n` +
-                        `⭐ ${rating}/10 | 🎭 ${genres}\n` +
-                        `📖 ${overview}\n` +
-                        `📅 فصل‌ها: ${seasons}`;
+                        `⭐ ${rating}/10\n` +
+                        `🎭 ${genres}`;
 
         inlineResults.push({
           type: 'photo',
@@ -155,6 +151,9 @@ async function handleRequest(request) {
           },
         });
       }
+
+      // دیباگ: لاگ کردن نتایج
+      console.log('Inline Results:', inlineResults);
 
       await answerInlineQuery(TELEGRAM_API, inlineQueryId, inlineResults);
       return new Response('OK', { status: 200 });
@@ -337,7 +336,7 @@ async function sendPhotoWithCaption(telegramApi, chatId, photoUrl, caption, butt
 
 async function answerInlineQuery(telegramApi, inlineQueryId, results) {
   const url = `${telegramApi}/answerInlineQuery`;
-  await fetch(url, {
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -346,6 +345,10 @@ async function answerInlineQuery(telegramApi, inlineQueryId, results) {
       cache_time: 300,
     }),
   });
+  if (!response.ok) {
+    console.error('Failed to answer inline query:', response.status, await response.text());
+  }
+  return response;
 }
 
 addEventListener('fetch', event => {
