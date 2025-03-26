@@ -33,7 +33,7 @@ async function handleRequest(request) {
     }
 
     const update = await request.json();
-    console.log('Update received:', JSON.stringify(update, null, 2)); // لاگ کامل درخواست ورودی
+    console.log('Update received:', JSON.stringify(update, null, 2));
 
     if (!update.message && !update.callback_query && !update.inline_query && !update.chosen_inline_result) {
       return new Response('Invalid update', { status: 400 });
@@ -50,7 +50,7 @@ async function handleRequest(request) {
     const isMember = await checkChannelMembership(chatId, userId);
     if (!isMember) {
       const joinMessage = `برای استفاده از ربات، لطفاً ابتدا در کانال ${CHANNEL_USERNAME} عضو شوید!`;
-      const joinButton = [[{ text: '📢 عضویت در کانال', url: 'https://t.me/FreeMoviez_ir' }]];
+      const joinButton = [[{ text: 'عضویت در کانال', url: 'https://t.me/FreeMoviez_ir' }]];
       if (chatId) {
         await sendMessageWithButtons(TELEGRAM_API, chatId, joinMessage, joinButton);
       } else if (inlineQuery) {
@@ -68,7 +68,7 @@ async function handleRequest(request) {
 
     // مدیریت دستور /start
     if (text === '/start') {
-      await sendMessage(TELEGRAM_API, chatId, `🎉 سلام به فیری مووی خوش اومدی! 🍿\nبرای جستجو، توی هر چتی بنویس @${BOT_USERNAME} و اسم فیلم یا سریال رو وارد کن (مثال: @${BOT_USERNAME} The Matrix)`);
+      await sendMessage(TELEGRAM_API, chatId, `سلام به فیری مووی خوش اومدی!\nبرای جستجو، توی هر چتی بنویس @${BOT_USERNAME} و اسم فیلم یا سریال رو وارد کن (مثال: @${BOT_USERNAME} The Matrix)`);
       return new Response('OK', { status: 200 });
     }
 
@@ -78,25 +78,32 @@ async function handleRequest(request) {
       const inlineQueryId = inlineQuery.id;
 
       if (!query) {
+        console.log('Query is empty, returning empty results');
         await answerInlineQuery(TELEGRAM_API, inlineQueryId, []);
         return new Response('OK', { status: 200 });
       }
 
+      console.log('Fetching movies and series for query:', query);
       const movieSearchUrl = `https://api.themoviedb.org/3/search/movie?api_key=${TMDb_API_KEY}&language=${language}&query=${encodeURIComponent(query)}`;
       const tvSearchUrl = `https://api.themoviedb.org/3/search/tv?api_key=${TMDb_API_KEY}&language=${language}&query=${encodeURIComponent(query)}`;
 
-      const [movieRes, tvRes] = await Promise.all([
-        fetch(movieSearchUrl).then(res => res.ok ? res.json() : Promise.reject(`خطای سرور (فیلم‌ها): ${res.status}`)),
-        fetch(tvSearchUrl).then(res => res.ok ? res.json() : Promise.reject(`خطای سرور (سریال‌ها): ${res.status}`)),
-      ]).catch(error => {
+      let movieRes, tvRes;
+      try {
+        [movieRes, tvRes] = await Promise.all([
+          fetch(movieSearchUrl).then(res => res.ok ? res.json() : Promise.reject(`خطای سرور (فیلم‌ها): ${res.status}`)),
+          fetch(tvSearchUrl).then(res => res.ok ? res.json() : Promise.reject(`خطای سرور (سریال‌ها): ${res.status}`)),
+        ]);
+      } catch (error) {
         console.error('Error in inline search:', error);
-        return [[], []];
-      });
+        await answerInlineQuery(TELEGRAM_API, inlineQueryId, []);
+        return new Response('OK', { status: 200 });
+      }
 
       const movies = movieRes.results ? movieRes.results.slice(0, 5) : [];
       const tvSeries = tvRes.results ? tvRes.results.slice(0, 5) : [];
       const inlineResults = [];
 
+      console.log('Processing movies:', movies.length);
       for (const movie of movies) {
         const titleFa = movie.title || 'نامشخص';
         const titleEn = movie.original_title || 'Unknown';
@@ -105,7 +112,10 @@ async function handleRequest(request) {
         const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'نامشخص';
         const genres = movie.genre_ids ? await fetchGenres(movie.genre_ids, 'movie') : 'نامشخص';
 
-        const caption = `🎥 ${titleFa} (${year})\n📝 ${titleEn}\n⭐ ${rating}/10\n🎭 ${genres}`;
+        const caption = `🎥 ${titleFa} (${year})\n` +
+                        `📝 ${titleEn}\n` +
+                        `⭐ ${rating}/10\n` +
+                        `🎭 ${genres}`;
 
         inlineResults.push({
           type: 'photo',
@@ -122,6 +132,7 @@ async function handleRequest(request) {
         });
       }
 
+      console.log('Processing series:', tvSeries.length);
       for (const tv of tvSeries) {
         const titleFa = tv.name || 'نامشخص';
         const titleEn = tv.original_name || 'Unknown';
@@ -130,7 +141,10 @@ async function handleRequest(request) {
         const rating = tv.vote_average ? tv.vote_average.toFixed(1) : 'نامشخص';
         const genres = tv.genre_ids ? await fetchGenres(tv.genre_ids, 'tv') : 'نامشخص';
 
-        const caption = `📺 ${titleFa} (${year})\n📝 ${titleEn}\n⭐ ${rating}/10\n🎭 ${genres}`;
+        const caption = `📺 ${titleFa} (${year})\n` +
+                        `📝 ${titleEn}\n` +
+                        `⭐ ${rating}/10\n` +
+                        `🎭 ${genres}`;
 
         inlineResults.push({
           type: 'photo',
@@ -148,7 +162,8 @@ async function handleRequest(request) {
       }
 
       console.log('Sending inline results:', JSON.stringify(inlineResults, null, 2));
-      await answerInlineQuery(TELEGRAM_API, inlineQueryId, inlineResults);
+      const response = await answerInlineQuery(TELEGRAM_API, inlineQueryId, inlineResults);
+      console.log('Inline query response:', await response.json());
       return new Response('OK', { status: 200 });
     }
 
@@ -159,13 +174,19 @@ async function handleRequest(request) {
       const itemId = isMovie ? resultId.replace('movie_', '') : resultId.replace('series_', '');
       const type = isMovie ? 'فیلم' : 'سریال';
 
+      console.log(`Fetching details for ${type} with ID: ${itemId}`);
       const details = isMovie
         ? await fetchMovieDetails(itemId, TMDb_API_KEY, language)
         : await fetchSeriesDetails(itemId, TMDb_API_KEY, language);
 
       if (!details) {
+        console.log(`Failed to fetch details for ${type} with ID: ${itemId}`);
         await sendMessage(TELEGRAM_API, chatId, `❌ مشکلی پیش اومد! نمی‌تونم اطلاعات ${type} رو پیدا کنم.`);
-      } else if (isMovie) {
+        return new Response('OK', { status: 200 });
+      }
+
+      // ارسال پیام با پوستر و اطلاعات کامل
+      if (isMovie) {
         const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
         const titleFa = details.title || 'نامشخص';
         const titleEn = details.original_title || 'Unknown';
@@ -173,6 +194,7 @@ async function handleRequest(request) {
         const overview = details.overview || 'بدون خلاصه';
         const genres = details.genres ? details.genres.map(g => g.name).join('، ') : 'نامشخص';
         const rating = details.vote_average ? Number(details.vote_average).toFixed(1) : 'بدون امتیاز';
+        const runtime = details.runtime ? `${details.runtime} دقیقه` : 'نامشخص';
         const imdbId = details.external_ids?.imdb_id || '';
         const imdbShort = imdbId ? imdbId.replace('tt', '') : '';
 
@@ -180,7 +202,8 @@ async function handleRequest(request) {
                               `📝 نام انگلیسی: ${titleEn}\n` +
                               `📖 خلاصه: ${overview.slice(0, 200)}${overview.length > 200 ? '...' : ''}\n` +
                               `🎭 ژانر: ${genres}\n` +
-                              `⭐ امتیاز: ${rating}/10`;
+                              `⭐ امتیاز: ${rating}/10\n` +
+                              `⏳ مدت زمان: ${runtime}`;
 
         const buttons = [];
         if (imdbShort) {
@@ -196,6 +219,7 @@ async function handleRequest(request) {
           { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/movie/index.html?id=${itemId}` },
         ]);
 
+        console.log(`Sending photo with caption for movie ${itemId}`);
         await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, buttons);
       } else {
         const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
@@ -205,8 +229,8 @@ async function handleRequest(request) {
         const overview = details.overview || 'بدون خلاصه';
         const genres = details.genres ? details.genres.map(g => g.name).join('، ') : 'نامشخص';
         const rating = details.vote_average ? Number(details.vote_average).toFixed(1) : 'بدون امتیاز';
-        const imdbId = details.external_ids?.imdb_id || '';
         const numberOfSeasons = details.number_of_seasons || 0;
+        const imdbId = details.external_ids?.imdb_id || '';
 
         const detailsMessage = `📺 ${titleFa} (${year})\n` +
                               `📝 نام انگلیسی: ${titleEn}\n` +
@@ -232,6 +256,7 @@ async function handleRequest(request) {
           { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/series/index.html?id=${itemId}` },
         ]);
 
+        console.log(`Sending photo with caption for series ${itemId}`);
         await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, buttons);
       }
       return new Response('OK', { status: 200 });
@@ -261,6 +286,7 @@ async function handleRequest(request) {
         const overview = details.overview || 'بدون خلاصه';
         const genres = details.genres ? details.genres.map(g => g.name).join('، ') : 'نامشخص';
         const rating = details.vote_average ? Number(details.vote_average).toFixed(1) : 'بدون امتیاز';
+        const runtime = details.runtime ? `${details.runtime} دقیقه` : 'نامشخص';
         const imdbId = details.external_ids?.imdb_id || '';
         const imdbShort = imdbId ? imdbId.replace('tt', '') : '';
 
@@ -268,7 +294,8 @@ async function handleRequest(request) {
                               `📝 نام انگلیسی: ${titleEn}\n` +
                               `📖 خلاصه: ${overview.slice(0, 200)}${overview.length > 200 ? '...' : ''}\n` +
                               `🎭 ژانر: ${genres}\n` +
-                              `⭐ امتیاز: ${rating}/10`;
+                              `⭐ امتیاز: ${rating}/10\n` +
+                              `⏳ مدت زمان: ${runtime}`;
 
         const buttons = [];
         if (imdbShort) {
@@ -293,8 +320,8 @@ async function handleRequest(request) {
         const overview = details.overview || 'بدون خلاصه';
         const genres = details.genres ? details.genres.map(g => g.name).join('، ') : 'نامشخص';
         const rating = details.vote_average ? Number(details.vote_average).toFixed(1) : 'بدون امتیاز';
-        const imdbId = details.external_ids?.imdb_id || '';
         const numberOfSeasons = details.number_of_seasons || 0;
+        const imdbId = details.external_ids?.imdb_id || '';
 
         const detailsMessage = `📺 ${titleFa} (${year})\n` +
                               `📝 نام انگلیسی: ${titleEn}\n` +
@@ -342,7 +369,10 @@ async function fetchGenres(genreIds, type) {
   try {
     const genreUrl = `https://api.themoviedb.org/3/genre/${type}/list?api_key=${TMDb_API_KEY}&language=${language}`;
     const response = await fetch(genreUrl);
-    if (!response.ok) throw new Error(`خطای سرور (ژانرها): ${response.status}`);
+    if (!response.ok) {
+      console.error(`Failed to fetch genres: ${response.status}`);
+      return 'نامشخص';
+    }
     const data = await response.json();
     const genres = data.genres.filter(g => genreIds.includes(g.id)).map(g => g.name).join('، ');
     return genres || 'نامشخص';
@@ -356,14 +386,20 @@ async function fetchGenres(genreIds, type) {
 async function fetchMovieDetails(movieId, apiKey, language) {
   const movieUrl = `https://api.themoviedb.org/3/movie/${movieId}?api_key=${apiKey}&language=${language}&append_to_response=external_ids`;
   const response = await fetch(movieUrl);
-  if (!response.ok) throw new Error(`خطای سرور (فیلم): ${response.status}`);
+  if (!response.ok) {
+    console.error(`Failed to fetch movie details: ${response.status}`);
+    return null;
+  }
   return await response.json();
 }
 
 async function fetchSeriesDetails(seriesId, apiKey, language) {
   const seriesUrl = `https://api.themoviedb.org/3/tv/${seriesId}?api_key=${apiKey}&language=${language}&append_to_response=external_ids`;
   const response = await fetch(seriesUrl);
-  if (!response.ok) throw new Error(`خطای سرور (سریال): ${response.status}`);
+  if (!response.ok) {
+    console.error(`Failed to fetch series details: ${response.status}`);
+    return null;
+  }
   return await response.json();
 }
 
@@ -404,7 +440,7 @@ async function sendPhotoWithCaption(telegramApi, chatId, photoUrl, caption, butt
     body: JSON.stringify({
       chat_id: chatId,
       photo: photoUrl,
-      caption,
+      caption: caption,
       reply_markup: buttons ? { inline_keyboard: buttons } : undefined,
     }),
   });
