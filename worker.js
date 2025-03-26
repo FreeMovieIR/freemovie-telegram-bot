@@ -13,12 +13,10 @@ async function checkChannelMembership(chatId, userId) {
   try {
     const response = await fetch(`${TELEGRAM_API}/getChatMember?chat_id=${CHANNEL_USERNAME}&user_id=${userId}`);
     const data = await response.json();
-
     if (!data.ok) {
       console.error('خطا در بررسی عضویت:', data.description);
       return false;
     }
-
     const status = data.result.status;
     return ['member', 'administrator', 'creator'].includes(status);
   } catch (error) {
@@ -49,8 +47,7 @@ async function handleRequest(request) {
     const isMember = await checkChannelMembership(chatId, userId);
     if (!isMember) {
       const joinMessage = `برای استفاده از ربات، لطفاً ابتدا در کانال ${CHANNEL_USERNAME} عضو شوید!`;
-      const joinButton = [[{ text: '📢 عضویت در کانال', url: 'https://t.me/FreeMoviez_ir' }]]; // دکمه شیشه‌ای
-
+      const joinButton = [[{ text: '📢 عضویت در کانال', url: 'https://t.me/FreeMoviez_ir' }]];
       if (chatId) {
         await sendMessageWithButtons(TELEGRAM_API, chatId, joinMessage, joinButton);
       } else if (inlineQuery) {
@@ -98,8 +95,8 @@ async function handleRequest(request) {
       const inlineResults = [];
 
       for (const movie of movies) {
-        const titleFa = movie.title || 'نامشخص'; // نام فارسی
-        const titleEn = movie.original_title || 'Unknown'; // نام انگلیسی
+        const titleFa = movie.title || 'نامشخص';
+        const titleEn = movie.original_title || 'Unknown';
         const year = movie.release_date ? movie.release_date.substr(0, 4) : 'نامشخص';
         const poster = movie.poster_path ? `${baseImageUrl}${movie.poster_path}` : defaultPoster;
         const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'نامشخص';
@@ -120,8 +117,8 @@ async function handleRequest(request) {
       }
 
       for (const tv of tvSeries) {
-        const titleFa = tv.name || 'نامشخص'; // نام فارسی
-        const titleEn = tv.original_name || 'Unknown'; // نام انگلیسی
+        const titleFa = tv.name || 'نامشخص';
+        const titleEn = tv.original_name || 'Unknown';
         const year = tv.first_air_date ? tv.first_air_date.substr(0, 4) : 'نامشخص';
         const poster = tv.poster_path ? `${baseImageUrl}${tv.poster_path}` : defaultPoster;
         const rating = tv.vote_average ? tv.vote_average.toFixed(1) : 'نامشخص';
@@ -181,6 +178,8 @@ async function handleRequest(request) {
         const overview = details.overview || 'بدون خلاصه';
         const genres = details.genres ? details.genres.map(g => g.name).join('، ') : 'نامشخص';
         const rating = details.vote_average ? Number(details.vote_average).toFixed(1) : 'بدون امتیاز';
+        const imdbId = details.imdb_id || ''; // از external_ids می‌گیریم
+        const imdbShort = imdbId ? imdbId.replace('tt', '') : '';
 
         const detailsMessage = `🎬 ${titleFa} (${year})\n` +
                               `📝 نام انگلیسی: ${titleEn}\n` +
@@ -188,9 +187,22 @@ async function handleRequest(request) {
                               `🎭 ژانر: ${genres}\n` +
                               `⭐ امتیاز: ${rating}/10`;
 
-        await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, [
-          [{ text: '📽️ تماشا', url: `https://m4tinbeigi-official.github.io/freemovie/movie/index.html?id=${itemId}` }],
+        // دکمه‌های دانلود و لینک سایت
+        const buttons = [];
+        if (imdbShort) {
+          buttons.push([
+            { text: '📥 لینک اصلی', url: `https://berlin.saymyname.website/Movies/${year}/${imdbShort}` },
+            { text: '📥 لینک کمکی 1', url: `https://tokyo.saymyname.website/Movies/${year}/${imdbShort}` },
+          ]);
+          buttons.push([
+            { text: '📥 لینک کمکی 2', url: `https://nairobi.saymyname.website/Movies/${year}/${imdbShort}` },
+          ]);
+        }
+        buttons.push([
+          { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/movie/index.html?id=${itemId}` },
         ]);
+
+        await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, buttons);
       } else {
         const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
         const titleFa = details.name || 'نامشخص';
@@ -199,16 +211,35 @@ async function handleRequest(request) {
         const overview = details.overview || 'بدون خلاصه';
         const genres = details.genres ? details.genres.map(g => g.name).join('، ') : 'نامشخص';
         const rating = details.vote_average ? Number(details.vote_average).toFixed(1) : 'بدون امتیاز';
+        const imdbId = details.external_ids?.imdb_id || '';
+        const numberOfSeasons = details.number_of_seasons || 0;
 
         const detailsMessage = `📺 ${titleFa} (${year})\n` +
                               `📝 نام انگلیسی: ${titleEn}\n` +
                               `📖 خلاصه: ${overview.slice(0, 200)}${overview.length > 200 ? '...' : ''}\n` +
                               `🎭 ژانر: ${genres}\n` +
-                              `⭐ امتیاز: ${rating}/10`;
+                              `⭐ امتیاز: ${rating}/10\n` +
+                              `📅 فصل‌ها: ${numberOfSeasons}`;
 
-        await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, [
-          [{ text: '📽️ تماشا', url: `https://m4tinbeigi-official.github.io/freemovie/series/index.html?id=${itemId}` }],
+        // دکمه‌های دانلود و لینک سایت
+        const buttons = [];
+        if (imdbId && numberOfSeasons > 0) {
+          for (let season = 1; season <= Math.min(numberOfSeasons, 2); season++) { // محدود به 2 فصل برای جلوگیری از شلوغی
+            buttons.push([
+              { text: `📥 فصل ${season} - کیفیت 1`, url: `https://subtitle.saymyname.website/DL/filmgir/?i=${imdbId}&f=${season}&q=1` },
+              { text: `📥 کیفیت 2`, url: `https://subtitle.saymyname.website/DL/filmgir/?i=${imdbId}&f=${season}&q=2` },
+            ]);
+            buttons.push([
+              { text: `📥 کیفیت 3`, url: `https://subtitle.saymyname.website/DL/filmgir/?i=${imdbId}&f=${season}&q=3` },
+              { text: `📥 کیفیت 4`, url: `https://subtitle.saymyname.website/DL/filmgir/?i=${imdbId}&f=${season}&q=4` },
+            ]);
+          }
+        }
+        buttons.push([
+          { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/series/index.html?id=${itemId}` },
         ]);
+
+        await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, buttons);
       }
 
       await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
@@ -227,14 +258,14 @@ async function handleRequest(request) {
 
 // توابع کمکی
 async function fetchMovieDetails(movieId, apiKey, language) {
-  const movieUrl = `https://api.themoviedb.org/3/movie/${movieId}?api_key=${apiKey}&language=${language}`;
+  const movieUrl = `https://api.themoviedb.org/3/movie/${movieId}?api_key=${apiKey}&language=${language}&append_to_response=external_ids`;
   const response = await fetch(movieUrl);
   if (!response.ok) throw new Error(`خطای سرور (فیلم): ${response.status}`);
   return await response.json();
 }
 
 async function fetchSeriesDetails(seriesId, apiKey, language) {
-  const seriesUrl = `https://api.themoviedb.org/3/tv/${seriesId}?api_key=${apiKey}&language=${language}`;
+  const seriesUrl = `https://api.themoviedb.org/3/tv/${seriesId}?api_key=${apiKey}&language=${language}&append_to_response=external_ids`;
   const response = await fetch(seriesUrl);
   if (!response.ok) throw new Error(`خطای سرور (سریال): ${response.status}`);
   return await response.json();
@@ -263,7 +294,7 @@ async function sendMessageWithButtons(telegramApi, chatId, text, buttons) {
   });
   if (!response.ok) {
     console.error(`Failed to send message with buttons: ${response.status}`);
-    await sendMessage(telegramApi, chatId, text); // در صورت خطا، فقط متن رو بفرست
+    await sendMessage(telegramApi, chatId, text);
   }
 }
 
