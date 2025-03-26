@@ -33,6 +33,8 @@ async function handleRequest(request) {
     }
 
     const update = await request.json();
+    console.log('Update received:', JSON.stringify(update, null, 2)); // لاگ کامل درخواست ورودی
+
     if (!update.message && !update.callback_query && !update.inline_query && !update.chosen_inline_result) {
       return new Response('Invalid update', { status: 400 });
     }
@@ -103,10 +105,7 @@ async function handleRequest(request) {
         const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'نامشخص';
         const genres = movie.genre_ids ? await fetchGenres(movie.genre_ids, 'movie') : 'نامشخص';
 
-        const caption = `🎥 ${titleFa} (${year})\n` +
-                        `📝 ${titleEn}\n` +
-                        `⭐ ${rating}/10\n` +
-                        `🎭 ${genres}`;
+        const caption = `🎥 ${titleFa} (${year})\n📝 ${titleEn}\n⭐ ${rating}/10\n🎭 ${genres}`;
 
         inlineResults.push({
           type: 'photo',
@@ -131,10 +130,7 @@ async function handleRequest(request) {
         const rating = tv.vote_average ? tv.vote_average.toFixed(1) : 'نامشخص';
         const genres = tv.genre_ids ? await fetchGenres(tv.genre_ids, 'tv') : 'نامشخص';
 
-        const caption = `📺 ${titleFa} (${year})\n` +
-                        `📝 ${titleEn}\n` +
-                        `⭐ ${rating}/10\n` +
-                        `🎭 ${genres}`;
+        const caption = `📺 ${titleFa} (${year})\n📝 ${titleEn}\n⭐ ${rating}/10\n🎭 ${genres}`;
 
         inlineResults.push({
           type: 'photo',
@@ -151,7 +147,7 @@ async function handleRequest(request) {
         });
       }
 
-      console.log('Inline Results:', JSON.stringify(inlineResults, null, 2));
+      console.log('Sending inline results:', JSON.stringify(inlineResults, null, 2));
       await answerInlineQuery(TELEGRAM_API, inlineQueryId, inlineResults);
       return new Response('OK', { status: 200 });
     }
@@ -378,7 +374,9 @@ async function sendMessage(telegramApi, chatId, text) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, text }),
   });
-  if (!response.ok) throw new Error(`Failed to send message: ${response.status}`);
+  if (!response.ok) {
+    console.error(`Failed to send message: ${response.status}, ${await response.text()}`);
+  }
 }
 
 async function sendMessageWithButtons(telegramApi, chatId, text, buttons) {
@@ -393,7 +391,7 @@ async function sendMessageWithButtons(telegramApi, chatId, text, buttons) {
     }),
   });
   if (!response.ok) {
-    console.error(`Failed to send message with buttons: ${response.status}`);
+    console.error(`Failed to send message with buttons: ${response.status}, ${await response.text()}`);
     await sendMessage(telegramApi, chatId, text);
   }
 }
