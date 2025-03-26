@@ -73,7 +73,7 @@
 این پروژه تحت مجوز [MIT License](LICENSE) منتشر شده است.
 
 ## تماس
-- **توسعه‌دهنده**: [مارتین بیگی](https://github.com/m4tinbeigi-official)
+- **توسعه‌دهنده**: [Rick Sanchez](https://github.com/m4tinbeigi-official)
 - **ربات تلگرام**: [@FreeMovieIRBot](https://t.me/FreeMovieIRBot)
 - **کانال تلگرام**: [@FreeMoviez_ir](https://t.me/FreeMoviez_ir)
 ```
