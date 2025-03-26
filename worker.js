@@ -26,6 +26,17 @@ async function checkChannelMembership(chatId, userId) {
   }
 }
 
+// تابع برای بررسی معتبر بودن URL تصویر
+async function isValidImageUrl(url) {
+  try {
+    const response = await fetch(url, { method: 'HEAD' });
+    return response.ok && response.headers.get('content-type')?.startsWith('image/');
+  } catch (error) {
+    console.error('خطا در بررسی URL تصویر:', error);
+    return false;
+  }
+}
+
 // تابع اصلی مدیریت درخواست‌ها
 async function handleRequest(request) {
   try {
@@ -75,7 +86,7 @@ async function handleRequest(request) {
       return new Response('OK', { status: 200 });
     }
 
-    // مدیریت جستجوی اینلاین (اصلاح‌شده برای نمایش به صورت article)
+    // مدیریت جستجوی اینلاین
     if (inlineQuery) {
       const query = inlineQuery.query.trim();
       const inlineQueryId = inlineQuery.id;
@@ -111,7 +122,7 @@ async function handleRequest(request) {
         const titleFa = movie.title || 'نامشخص';
         const titleEn = movie.original_title || 'Unknown';
         const year = movie.release_date ? movie.release_date.substr(0, 4) : 'نامشخص';
-        const thumb = movie.poster_path ? `${baseThumbUrl}${movie.poster_path}` : defaultPoster; // تصویر کوچک‌تر برای thumbnail
+        const thumb = movie.poster_path ? `${baseThumbUrl}${movie.poster_path}` : defaultPoster;
         const overview = movie.overview || 'بدون خلاصه';
         const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'نامشخص';
         const genres = movie.genre_ids ? await fetchGenres(movie.genre_ids, 'movie') : 'نامشخص';
@@ -145,7 +156,7 @@ async function handleRequest(request) {
         const titleFa = tv.name || 'نامشخص';
         const titleEn = tv.original_name || 'Unknown';
         const year = tv.first_air_date ? tv.first_air_date.substr(0, 4) : 'نامشخص';
-        const thumb = tv.poster_path ? `${baseThumbUrl}${tv.poster_path}` : defaultPoster; // تصویر کوچک‌تر برای thumbnail
+        const thumb = tv.poster_path ? `${baseThumbUrl}${tv.poster_path}` : defaultPoster;
         const overview = tv.overview || 'بدون خلاصه';
         const rating = tv.vote_average ? tv.vote_average.toFixed(1) : 'نامشخص';
         const genres = tv.genre_ids ? await fetchGenres(tv.genre_ids, 'tv') : 'نامشخص';
@@ -200,7 +211,7 @@ async function handleRequest(request) {
 
       // ارسال پیام با پوستر و اطلاعات کامل
       if (isMovie) {
-        const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
+        let poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
         const titleFa = details.title || 'نامشخص';
         const titleEn = details.original_title || 'Unknown';
         const year = details.release_date ? details.release_date.split('-')[0] : 'نامشخص';
@@ -232,10 +243,17 @@ async function handleRequest(request) {
           { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/movie/index.html?id=${itemId}` },
         ]);
 
+        // بررسی معتبر بودن URL پوستر
+        const isPosterValid = await isValidImageUrl(poster);
+        if (!isPosterValid) {
+          console.warn(`Poster URL invalid for movie ${itemId}: ${poster}. Falling back to default poster.`);
+          poster = defaultPoster;
+        }
+
         console.log(`Sending photo with caption for movie ${itemId}:`, detailsMessage);
         await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, buttons);
       } else {
-        const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
+        let poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
         const titleFa = details.name || 'نامشخص';
         const titleEn = details.original_name || 'Unknown';
         const year = details.first_air_date ? details.first_air_date.substr(0, 4) : 'نامشخص';
@@ -268,6 +286,13 @@ async function handleRequest(request) {
         buttons.push([
           { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/series/index.html?id=${itemId}` },
         ]);
+
+        // بررسی معتبر بودن URL پوستر
+        const isPosterValid = await isValidImageUrl(poster);
+        if (!isPosterValid) {
+          console.warn(`Poster URL invalid for series ${itemId}: ${poster}. Falling back to default poster.`);
+          poster = defaultPoster;
+        }
 
         console.log(`Sending photo with caption for series ${itemId}:`, detailsMessage);
         await sendPhotoWithCaption(TELEGRAM_API, chatId, poster, detailsMessage, buttons);
@@ -292,7 +317,7 @@ async function handleRequest(request) {
       if (!details) {
         await sendMessage(TELEGRAM_API, effectiveChatId, `❌ مشکلی پیش اومد! نمی‌تونم اطلاعات ${type} رو پیدا کنم.`);
       } else if (isMovie) {
-        const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
+        let poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
         const titleFa = details.title || 'نامشخص';
         const titleEn = details.original_title || 'Unknown';
         const year = details.release_date ? details.release_date.split('-')[0] : 'نامشخص';
@@ -324,9 +349,16 @@ async function handleRequest(request) {
           { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/movie/index.html?id=${itemId}` },
         ]);
 
+        // بررسی معتبر بودن URL پوستر
+        const isPosterValid = await isValidImageUrl(poster);
+        if (!isPosterValid) {
+          console.warn(`Poster URL invalid for movie ${itemId}: ${poster}. Falling back to default poster.`);
+          poster = defaultPoster;
+        }
+
         await sendPhotoWithCaption(TELEGRAM_API, effectiveChatId, poster, detailsMessage, buttons);
       } else {
-        const poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
+        let poster = details.poster_path ? `${baseImageUrl}${details.poster_path}` : defaultPoster;
         const titleFa = details.name || 'نامشخص';
         const titleEn = details.original_name || 'Unknown';
         const year = details.first_air_date ? details.first_air_date.substr(0, 4) : 'نامشخص';
@@ -359,6 +391,13 @@ async function handleRequest(request) {
         buttons.push([
           { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/series/index.html?id=${itemId}` },
         ]);
+
+        // بررسی معتبر بودن URL پوستر
+        const isPosterValid = await isValidImageUrl(poster);
+        if (!isPosterValid) {
+          console.warn(`Poster URL invalid for series ${itemId}: ${poster}. Falling back to default poster.`);
+          poster = defaultPoster;
+        }
 
         await sendPhotoWithCaption(TELEGRAM_API, effectiveChatId, poster, detailsMessage, buttons);
       }
@@ -459,7 +498,8 @@ async function sendPhotoWithCaption(telegramApi, chatId, photoUrl, caption, butt
   });
   if (!response.ok) {
     console.error(`Failed to send photo: ${response.status}, ${await response.text()}`);
-    await sendMessage(telegramApi, chatId, caption);
+    const errorMessage = `${caption}\n⚠️ مشکلی در بارگذاری پوستر وجود داشت. لطفاً بعداً دوباره تلاش کنید.`;
+    await sendMessage(telegramApi, chatId, errorMessage);
   }
 }
 
