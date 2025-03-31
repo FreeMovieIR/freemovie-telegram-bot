@@ -7,7 +7,7 @@ const TMDb_API_KEY = '1dc4cbf81f0accf4fa108820d551dafc';
 const language = 'fa'; // زبان پارسی
 const baseImageUrl = 'https://image.tmdb.org/t/p/w500';
 const baseThumbUrl = 'https://image.tmdb.org/t/p/w200'; // برای تصاویر کوچک‌تر
-const defaultPoster = 'https://m4tinbeigi-official.github.io/freemovie/images/default-freemovie-300.png';
+const defaultPoster = 'https://freemovieir.github.io/images/default-freemovie-300.png';
 
 // تابع بررسی عضویت کاربر در کانال
 async function checkChannelMembership(chatId, userId) {
@@ -145,7 +145,7 @@ async function handleRequest(request) {
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `details_${movie.id}` }],
-              [{ text: '📽️ تماشا', url: `https://m4tinbeigi-official.github.io/freemovie/movie/index.html?id=${movie.id}` }],
+              [{ text: '📽️ تماشا', url: `https://freemovieir.github.io/movie/index.html?id=${movie.id}` }],
             ],
           },
         });
@@ -179,7 +179,7 @@ async function handleRequest(request) {
           reply_markup: {
             inline_keyboard: [
               [{ text: 'ℹ️ جزئیات بیشتر', callback_data: `seriesdetails_${tv.id}` }],
-              [{ text: '📽️ تماشا', url: `https://m4tinbeigi-official.github.io/freemovie/series/index.html?id=${tv.id}` }],
+              [{ text: '📽️ تماشا', url: `https://freemovieir.github.io/series/index.html?id=${tv.id}` }],
             ],
           },
         });
@@ -240,7 +240,7 @@ async function handleRequest(request) {
           ]);
         }
         buttons.push([
-          { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/movie/index.html?id=${itemId}` },
+          { text: '🌐 مشاهده در سایت', url: `https://freemovieir.github.io/movie/index.html?id=${itemId}` },
         ]);
 
         // بررسی معتبر بودن URL پوستر
@@ -284,7 +284,7 @@ async function handleRequest(request) {
           }
         }
         buttons.push([
-          { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/series/index.html?id=${itemId}` },
+          { text: '🌐 مشاهده در سایت', url: `https://freemovieir.github.io/series/index.html?id=${itemId}` },
         ]);
 
         // بررسی معتبر بودن URL پوستر
@@ -346,7 +346,7 @@ async function handleRequest(request) {
           ]);
         }
         buttons.push([
-          { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/movie/index.html?id=${itemId}` },
+          { text: '🌐 مشاهده در سایت', url: `https://freemovieir.github.io/movie/index.html?id=${itemId}` },
         ]);
 
         // بررسی معتبر بودن URL پوستر
@@ -389,7 +389,7 @@ async function handleRequest(request) {
           }
         }
         buttons.push([
-          { text: '🌐 مشاهده در سایت', url: `https://m4tinbeigi-official.github.io/freemovie/series/index.html?id=${itemId}` },
+          { text: '🌐 مشاهده در سایت', url: `https://freemovieir.github.io/series/index.html?id=${itemId}` },
         ]);
 
         // بررسی معتبر بودن URL پوستر
